@@ -12,10 +12,12 @@ import com.ctre.phoenix6.swerve.SwerveRequest;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
+import edu.wpi.first.wpilibj2.command.WaitCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
-
+import frc.robot.commands.test.TestDrivetrain;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 
@@ -47,7 +49,7 @@ public class RobotContainer
     {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
-        drivetrain.setDefaultCommand(
+        var driveCommand = 
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() -> drive.withVelocityX(-joystick.getLeftY() * MaxSpeed) // Drive forward with
                                                                                                // negative Y
@@ -55,7 +57,9 @@ public class RobotContainer
                 .withVelocityY(-joystick.getLeftX() * MaxSpeed) // Drive left with negative X (left)
                 .withRotationalRate(-joystick.getRightX() * MaxAngularRate) // Drive counterclockwise with
                                                                             // negative X (left)
-            ));
+            );
+        driveCommand.addRequirements(drivetrain);
+        drivetrain.setDefaultCommand(driveCommand);
 
         // Idle while the robot is disabled. This ensures the configured
         // neutral mode is applied to the drive motors while disabled.
@@ -83,5 +87,17 @@ public class RobotContainer
     public Command getAutonomousCommand()
     {
         return Commands.print("No autonomous command configured");
+    }
+
+    public Command getTestCommand()
+    {
+        var group = new SequentialCommandGroup();
+
+        // Wait for startup messages to be logged to driver station console:
+        group.addCommands(new WaitCommand(5));
+
+        group.addCommands(new TestDrivetrain(drivetrain));
+
+        return group;
     }
 }
