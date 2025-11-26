@@ -4,6 +4,7 @@
 
 package frc.robot.commands.test;
 
+import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.TalonFX;
 
 import edu.wpi.first.wpilibj2.command.Command;
@@ -16,13 +17,17 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 public class TestSwerveModuleSteerMotor extends Command
 {
     private final TalonFX motor;
+    private final CANcoder encoder;
     private final String moduleName;
     private final double percentOutput;
+    private double encoderStartPosition;
 
     /** Creates a new TestSwerveModuleDriveMotor. */
     public TestSwerveModuleSteerMotor(CommandSwerveDrivetrain drivetrain, int moduleIndex, double percentOutput)
     {
-        this.motor = drivetrain.getModule(moduleIndex).getSteerMotor();
+        var module = drivetrain.getModule(moduleIndex);
+        this.motor = module.getSteerMotor();
+        this.encoder = module.getEncoder();
         this.moduleName = TestConstants.swerveModuleNames[moduleIndex];
         this.percentOutput = percentOutput;
 
@@ -34,6 +39,7 @@ public class TestSwerveModuleSteerMotor extends Command
     public void initialize()
     {
         System.out.println("Testing Steer Motor: " + moduleName  + (percentOutput > 0 ? " CCW" : " CW"));
+        encoderStartPosition = encoder.getPosition().getValueAsDouble();
     }
 
     // Called every time the scheduler runs while the command is scheduled.
@@ -48,6 +54,11 @@ public class TestSwerveModuleSteerMotor extends Command
     public void end(boolean interrupted)
     {
         motor.set(0);
+        var encoderEndPosition = encoder.getPosition().getValueAsDouble();
+        var encoderPassed = percentOutput > 0
+            ? encoderEndPosition > encoderStartPosition
+            : encoderEndPosition < encoderStartPosition;
+        System.out.println("Testing Steer Encoder: " + moduleName  + (encoderPassed ? " PASSED" : " FAILED"));
     }
 
     // Returns true when the command should end.
