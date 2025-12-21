@@ -7,12 +7,17 @@ import java.util.function.Supplier;
 import com.ctre.phoenix6.SignalLogger;
 import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -22,7 +27,7 @@ import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
-
+import frc.robot.Constants.PathPlannerConstants;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
 
 /**
@@ -41,6 +46,10 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private static final Rotation2d kRedAlliancePerspectiveRotation = Rotation2d.k180deg;
     /* Keep track if we've ever applied the operator perspective before or not */
     private boolean m_hasAppliedOperatorPerspective = false;
+
+    /* Swerve request used by PathPlanner for moving ROBOT RELATIVE: */
+    private final SwerveRequest.RobotCentric m_pathPlannerRequest = new SwerveRequest.RobotCentric()
+        .withDriveRequestType(DriveRequestType.Velocity);
 
     /* Swerve requests to apply during SysId characterization */
     private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization = new SwerveRequest.SysIdSwerveTranslation();
@@ -61,6 +70,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
             this));
 
     /* SysId routine for characterizing steer. This is used to find PID gains for the steer motors. */
+    @SuppressWarnings("unused")
     private final SysIdRoutine m_sysIdRoutineSteer = new SysIdRoutine(
         new SysIdRoutine.Config(
             null, // Use default ramp rate (1 V/s)
@@ -78,6 +88,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      * This is used to find PID gains for the FieldCentricFacingAngle HeadingController.
      * See the documentation of SwerveRequest.SysIdSwerveRotation for info on importing the log to SysId.
      */
+    @SuppressWarnings("unused")
     private final SysIdRoutine m_sysIdRoutineRotation = new SysIdRoutine(
         new SysIdRoutine.Config(
             /* This is in radians per second², but SysId only supports "volts per second" */
@@ -309,4 +320,60 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         super.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds),
             visionMeasurementStdDevs);
     }
+
+    /**
+     * Adds PathPlanner support to the drivetrain.
+     */
+    public void setupPathPlanner()
+    {
+        RobotConfig config = null;
+        try
+        {
+            config = RobotConfig.fromGUISettings();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        
+        AutoBuilder.configure(
+            () -> getState().Pose, // Robot pose supplier
+            (initialHolonomicPose) -> resetPose(initialHolonomicPose), // Method to reset odometry (will be called if your auto has a starting pose)
+            () -> getState().Speeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+            // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
+            (speeds, feedForwards) -> setControl(m_pathPlannerRequest
+                .withVelocityX(speeds.vxMetersPerSecond)
+                .withVelocityY(speeds.vyMetersPerSecond)
+                .withRotationalRate(speeds.omegaRadiansPerSecond)),
+            new PPHolonomicDriveController(
+                // Translation PID constants
+                PathPlannerConstants.TRANSLATION_PID,
+                // Rotation PID constants
+                PathPlannerConstants.ANGLE_PID
+            ),
+            config,
+            () ->
+            {
+                // Boolean supplier that controls when the path will be mirrored for the red
+                // alliance
+                // This will flip the path being followed to the red side of the field.
+                // THE ORIGIN WILL REMAIN ON THE BLUE SIDE
+                var alliance = DriverStation.getAlliance();
+                return alliance.isPresent() ? alliance.get() == DriverStation.Alliance.Red : false;
+            },
+            this // Reference to this subsystem to set requirements
+        );
+    }
+
+
+    /**
+     * Set chassis speeds with closed-loop velocity control.
+     *
+     * @param chassisSpeeds
+     *            Chassis Speeds to set.
+     */
+    public void setChassisSpeeds(ChassisSpeeds chassisSpeeds)
+    {
+    }
+
 }

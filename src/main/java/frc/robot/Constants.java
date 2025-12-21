@@ -4,9 +4,17 @@
 
 package frc.robot;
 
+import com.pathplanner.lib.config.PIDConstants;
+
 /** Add your docs here. */
 public final class Constants
 {
+    public static final class PathPlannerConstants
+    {
+        public static final PIDConstants TRANSLATION_PID = new PIDConstants(0.7, 0, 0);
+        public static final PIDConstants ANGLE_PID = new PIDConstants(0.4, 0, 0.01);
+    }
+    
     public static class TestConstants
     {
         public static final double betweenTimeSecs = 1.0;
